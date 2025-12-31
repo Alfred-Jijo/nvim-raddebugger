@@ -26,6 +26,9 @@ function M.setup()
 	vim.api.nvim_create_user_command("RaddebuggerStepOver", Exec.step_over, {})
 	vim.api.nvim_create_user_command("RaddebuggerStepInto", Exec.step_into, {})
 	vim.api.nvim_create_user_command("RaddebuggerStepOut", Exec.step_out, {})
+	vim.api.nvim_create_user_command("RaddebuggerLaunch", function(opts)
+		Exec.aunch_gui(opts.args)
+	end, { nargs = 1, complete = "file" })
 end
 
 return M

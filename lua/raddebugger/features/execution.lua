@@ -45,4 +45,28 @@ function M.step_over_line() cmd("step_over_line") end
 
 function M.step_into_line() cmd("step_into_line") end
 
+function M.launch_gui(path)
+	if not path or path == "" then
+		vim.notify("Please specify an executable path", vim.log.levels.ERROR)
+		return
+	end
+
+	local Path = require("raddebugger.utils.path")
+	local normalized = Path.normalize(path)
+
+	vim.notify("Launching RadDebugger: " .. normalized, vim.log.levels.INFO)
+
+	-- Spawn the process detached
+	vim.system({ "raddbg", normalized }, {
+		detach = true,
+		text = true
+	}, function(obj)
+		if obj.code ~= 0 then
+			vim.schedule(function()
+				vim.notify("Failed to open GUI: " .. (obj.stderr or ""), vim.log.levels.ERROR)
+			end)
+		end
+	end)
+end
+
 return M
