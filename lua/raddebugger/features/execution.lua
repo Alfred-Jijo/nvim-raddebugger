@@ -23,41 +23,45 @@ end
 
 ---Ensure the RadDebugger GUI is running.
 ---Checks if running via IPC.
----If not, launches clean (no args) and waits.
+---If not, forces a DETACHED GUI launch via cmd start.
 ---@param callback function Function to run once GUI is ready
 function M.ensure_gui_open(callback)
-	-- Ping the debugger
+	-- Check if already running by pinging "bring_to_front"
 	IPC.exec({ "bring_to_front" }, function(success)
 		if success then
 			-- Debugger is already alive
 			if callback then callback() end
 		else
-			-- Debugger is dead. Launch it clean.
+			-- Debugger is dead. Launch it.
 			local exe = vim.fn.exepath("raddbg")
 			if exe == "" then
 				vim.notify("Critical Error: 'raddbg' not found in PATH.", vim.log.levels.ERROR)
 				return
 			end
 
-			vim.notify("Launching RAD Debugger...", vim.log.levels.INFO)
+			vim.notify("Launching RAD Debugger GUI...", vim.log.levels.INFO)
 
-			-- spawn detached with NO stdout/stderr capturing.
-			-- Capturing pipes on Windows GUI apps often causes them to hang or fail to show.
-			vim.system({ exe }, {
+			-- 'cmd /c start'
+			vim.system({ "cmd.exe", "/c", "start", "", exe }, {
 				detach = true,
-				stdout = false,
-				stderr = false
 			}, function()
-				-- Process callback is unreliable for detached GUIs, so we ignore it.
+				-- Callback ignored because 'start' exits immediately
 			end)
 
 			-- Wait for initialization
-			-- use a heuristic delay to let the GUI window create its message pump.
+			-- Increased wait time to 2000ms to ensure the heavy GUI has time to initialize IPC
 			vim.defer_fn(function()
-				-- Try to bring to front again to confirm readiness
-				IPC.exec({ "bring_to_front" }, function() end)
-				if callback then callback() end
-			end, 1500)
+				-- Double-check connection before proceeding
+				IPC.exec({ "bring_to_front" }, function(ok)
+					if ok then
+						if callback then callback() end
+					else
+						vim.notify(
+							"Launched RadDebugger, but IPC connection failed. Is it blocked?",
+							vim.log.levels.WARN)
+					end
+				end)
+			end, 2000)
 		end
 	end)
 end
