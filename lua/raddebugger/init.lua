@@ -6,7 +6,7 @@ local IPC = require("raddebugger.core.ipc")
 local M = {}
 
 -- Plugin Version
-M._VERSION = "0.10.0"
+M._VERSION = "0.10.1"
 
 local default_config = {
 	project_file = nil, -- Auto-detect
@@ -64,7 +64,7 @@ function M.setup(opts)
 	Commands.setup()
 	apply_keymaps(opts.keymaps)
 
-	-- NEW: Add Version Command
+	-- Add Version Command
 	vim.api.nvim_create_user_command("RaddebuggerVersion", function()
 		vim.notify("nvim-raddebugger v" .. M._VERSION, vim.log.levels.INFO)
 	end, {})
