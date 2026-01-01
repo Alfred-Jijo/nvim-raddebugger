@@ -5,19 +5,22 @@ local IPC = require("raddebugger.core.ipc")
 
 local M = {}
 
+-- Plugin Version
+M._VERSION = "0.10.0"
+
 local default_config = {
 	project_file = nil, -- Auto-detect
 
-	-- Set to 'false' to disable all default keymaps
+	-- Keymaps (Visual Studio Style Defaults)
+	-- Set any key to false to disable it
 	keymaps = {
 		toggle_breakpoint = "<F9>",
 		continue          = "<F5>",
 		step_over         = "<F10>",
 		step_into         = "<F11>",
-		step_out          = "<S-F11>", -- Shift + F11
-		stop              = "<S-F5>", -- Shift + F5 (Kill)
-		target_menu       = nil, -- No default, to avoid Leader conflicts
-		breakpoint_menu   = nil,
+		step_out          = "<S-F11>",
+		stop              = "<S-F5>",
+		target_menu       = nil, 
 	},
 
 	breakpoint_color = "#51202a",
@@ -36,7 +39,7 @@ end
 
 ---Apply keymaps based on config
 local function apply_keymaps(keymaps)
-	if keymaps == false then return end -- User disabled all maps
+	if keymaps == false then return end
 
 	local map = function(lhs, cmd, desc)
 		if lhs then
@@ -44,41 +47,39 @@ local function apply_keymaps(keymaps)
 		end
 	end
 
-	-- Map internal keys to commands
 	map(keymaps.toggle_breakpoint, "<cmd>RaddebuggerToggleBreakpoint<CR>", "Toggle Breakpoint")
-	map(keymaps.continue, "<cmd>RaddebuggerContinue<CR>", "Continue/Run")
-	map(keymaps.step_over, "<cmd>RaddebuggerStepOver<CR>", "Step Over")
-	map(keymaps.step_into, "<cmd>RaddebuggerStepInto<CR>", "Step Into")
-	map(keymaps.step_out, "<cmd>RaddebuggerStepOut<CR>", "Step Out")
-	map(keymaps.stop, "<cmd>RaddebuggerKill<CR>", "Stop/Kill")
-	map(keymaps.target_menu, "<cmd>RaddebuggerTargetMenu<CR>", "Targets Menu")
+	map(keymaps.continue,          "<cmd>RaddebuggerContinue<CR>",         "Continue/Run")
+	map(keymaps.step_over,         "<cmd>RaddebuggerStepOver<CR>",         "Step Over")
+	map(keymaps.step_into,         "<cmd>RaddebuggerStepInto<CR>",         "Step Into")
+	map(keymaps.step_out,          "<cmd>RaddebuggerStepOut<CR>",          "Step Out")
+	map(keymaps.stop,              "<cmd>RaddebuggerKill<CR>",             "Stop/Kill")
+	map(keymaps.target_menu,       "<cmd>RaddebuggerTargetMenu<CR>",       "Targets Menu")
 end
 
 ---Initialize the plugin
 function M.setup(opts)
-	-- Merge defaults with user opts
 	opts = vim.tbl_deep_extend("force", default_config, opts or {})
 
 	Signs.setup(opts)
 	Commands.setup()
 	apply_keymaps(opts.keymaps)
 
+	-- NEW: Add Version Command
+	vim.api.nvim_create_user_command("RaddebuggerVersion", function()
+		vim.notify("nvim-raddebugger v" .. M._VERSION, vim.log.levels.INFO)
+	end, {})
+
 	if not IPC.validate_bin() then
 		vim.notify("RAD Debugger (raddbg) not found in PATH", vim.log.levels.WARN)
 	end
 
-	-- Project Auto-detection Logic
-	local project_to_load = opts.project_file
-	if not project_to_load then
-		local found = find_project_file()
-		if found then
-			project_to_load = found
-			vim.notify("Auto-detected RAD project: " .. vim.fn.fnamemodify(found, ":t"), vim.log.levels.INFO)
-		end
-	end
-
+	-- Auto-load project if found
+	local project_to_load = opts.project_file or find_project_file()
 	if project_to_load then
-		vim.schedule(function() vim.cmd("RaddebuggerInit " .. project_to_load) end)
+		-- Schedule init to run after startup
+		vim.schedule(function()
+			vim.cmd("RaddebuggerInit " .. project_to_load)
+		end)
 	end
 end
 
