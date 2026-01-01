@@ -6,7 +6,7 @@ local IPC = require("raddebugger.core.ipc")
 local M = {}
 
 -- Plugin Version
-M._VERSION = "0.10.1"
+M._VERSION = "0.11.0"
 
 local default_config = {
 	project_file = nil, -- Auto-detect
@@ -20,7 +20,7 @@ local default_config = {
 		step_into         = "<F11>",
 		step_out          = "<S-F11>",
 		stop              = "<S-F5>",
-		target_menu       = nil, 
+		target_menu       = nil,
 	},
 
 	breakpoint_color = "#51202a",
@@ -48,12 +48,12 @@ local function apply_keymaps(keymaps)
 	end
 
 	map(keymaps.toggle_breakpoint, "<cmd>RaddebuggerToggleBreakpoint<CR>", "Toggle Breakpoint")
-	map(keymaps.continue,          "<cmd>RaddebuggerContinue<CR>",         "Continue/Run")
-	map(keymaps.step_over,         "<cmd>RaddebuggerStepOver<CR>",         "Step Over")
-	map(keymaps.step_into,         "<cmd>RaddebuggerStepInto<CR>",         "Step Into")
-	map(keymaps.step_out,          "<cmd>RaddebuggerStepOut<CR>",          "Step Out")
-	map(keymaps.stop,              "<cmd>RaddebuggerKill<CR>",             "Stop/Kill")
-	map(keymaps.target_menu,       "<cmd>RaddebuggerTargetMenu<CR>",       "Targets Menu")
+	map(keymaps.continue, "<cmd>RaddebuggerContinue<CR>", "Continue/Run")
+	map(keymaps.step_over, "<cmd>RaddebuggerStepOver<CR>", "Step Over")
+	map(keymaps.step_into, "<cmd>RaddebuggerStepInto<CR>", "Step Into")
+	map(keymaps.step_out, "<cmd>RaddebuggerStepOut<CR>", "Step Out")
+	map(keymaps.stop, "<cmd>RaddebuggerKill<CR>", "Stop/Kill")
+	map(keymaps.target_menu, "<cmd>RaddebuggerTargetMenu<CR>", "Targets Menu")
 end
 
 ---Initialize the plugin
@@ -61,13 +61,10 @@ function M.setup(opts)
 	opts = vim.tbl_deep_extend("force", default_config, opts or {})
 
 	Signs.setup(opts)
-	Commands.setup()
-	apply_keymaps(opts.keymaps)
 
-	-- Add Version Command
-	vim.api.nvim_create_user_command("RaddebuggerVersion", function()
-		vim.notify("nvim-raddebugger v" .. M._VERSION, vim.log.levels.INFO)
-	end, {})
+	Commands.setup({ version = M._VERSION })
+
+	apply_keymaps(opts.keymaps)
 
 	if not IPC.validate_bin() then
 		vim.notify("RAD Debugger (raddbg) not found in PATH", vim.log.levels.WARN)

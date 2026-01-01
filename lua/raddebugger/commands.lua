@@ -16,7 +16,15 @@ local function find_target_exe()
 	return nil
 end
 
-function M.setup()
+function M.setup(opts)
+	opts = opts or {}
+
+	-- Version
+	vim.api.nvim_create_user_command("RaddebuggerVersion", function()
+		local ver = opts.version or "unknown"
+		vim.notify("nvim-raddebugger v" .. ver, vim.log.levels.INFO)
+	end, {})
+
 	-- Just opens the GUI (or focuses it). No target changes.
 	vim.api.nvim_create_user_command("RaddebuggerGUI", function()
 		Exec.ensure_gui_open(function()
@@ -25,8 +33,8 @@ function M.setup()
 	end, {})
 
 	-- Opens GUI -> Selects Target EXE -> Loads Breakpoints
-	vim.api.nvim_create_user_command("RaddebuggerInit", function(opts)
-		local target = opts.args
+	vim.api.nvim_create_user_command("RaddebuggerInit", function(cmd_opts)
+		local target = cmd_opts.args
 
 		-- Auto-Discovery
 		if target == "" or target == nil then
