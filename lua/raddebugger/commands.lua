@@ -1,22 +1,15 @@
 local Exec = require("raddebugger.features.execution")
 local Breakpoints = require("raddebugger.features.breakpoints")
 local Targets = require("raddebugger.features.targets")
-local Project = require("raddebugger.core.project")
-
 local M = {}
 
----Helper: Try to find a valid target in CWD
----@return string|nil
-local function find_target()
-	-- Existing Project
-	local projects = vim.fn.glob("*.raddbg", false, true)
-	if #projects > 0 then return projects[1] end
-
-	-- Executable
+---Helper: Try to find a valid executable in CWD
+local function find_target_exe()
+	-- Look for Executable (.exe) in build/
 	local exes = vim.fn.glob("build/*.exe", false, true)
 	if #exes > 0 then return exes[1] end
 
-	-- Executable in root
+	-- Look for Executable (.exe) in root
 	exes = vim.fn.glob("*.exe", false, true)
 	if #exes > 0 then return exes[1] end
 
@@ -24,39 +17,32 @@ local function find_target()
 end
 
 function M.setup()
-	-- DUMB LAUNCH
-	vim.api.nvim_create_user_command("RaddebuggerLaunch", function(opts)
-		Exec.launch_gui(opts.args)
-	end, { nargs = "?", complete = "file" })
+	-- Just opens the GUI (or focuses it). No target changes.
+	vim.api.nvim_create_user_command("RaddebuggerGUI", function()
+		Exec.ensure_gui_open(function()
+			vim.notify("RAD Debugger is ready.", vim.log.levels.INFO)
+		end)
+	end, {})
 
-	-- SMART LAUNCH: Finds file, Launches, Loads State
+	-- Opens GUI -> Selects Target EXE -> Loads Breakpoints
 	vim.api.nvim_create_user_command("RaddebuggerInit", function(opts)
 		local target = opts.args
 
-		-- Auto-Discovery if no arg provided
+		-- Auto-Discovery
 		if target == "" or target == nil then
-			target = find_target()
-			if target then
-				vim.notify("Target found: " .. target, vim.log.levels.INFO)
-			end
+			target = find_target_exe()
 		end
 
-		-- Launch the GUI
-		Exec.launch_gui(target)
-
-		-- If we ended up with a project file, start watching it
-		if target then
-			local proj_file = target:gsub("%.exe$", ".raddbg")
-
-			-- Slight delay to let Raddbg create the file if it doesn't exist
-			vim.defer_fn(function()
-				Project.load(proj_file)
-				Project.start_watching()
-			end, 1000)
+		if not target then
+			vim.notify("No target exe found. Opening empty GUI.", vim.log.levels.WARN)
+			Exec.ensure_gui_open()
+		else
+			-- Launch and Attach via IPC
+			Exec.launch_and_attach(target)
 		end
 	end, { nargs = "?", complete = "file" })
 
-	-- Other Commands
+	-- Standard Commands
 	vim.api.nvim_create_user_command("RaddebuggerToggleBreakpoint", function()
 		local file = vim.api.nvim_buf_get_name(0)
 		local line = vim.api.nvim_win_get_cursor(0)[1]
@@ -64,8 +50,6 @@ function M.setup()
 	end, {})
 
 	vim.api.nvim_create_user_command("RaddebuggerTargetMenu", Targets.show_menu, {})
-
-	-- Execution Control
 	vim.api.nvim_create_user_command("RaddebuggerContinue", Exec.continue, {})
 	vim.api.nvim_create_user_command("RaddebuggerRun", Exec.run, {})
 	vim.api.nvim_create_user_command("RaddebuggerKill", Exec.kill, {})
