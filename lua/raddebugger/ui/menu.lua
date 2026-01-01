@@ -2,13 +2,16 @@ local M = {}
 
 ---@param title string
 ---@param items string[]
----@param keymaps table<string, function(index: number)>
+---@param keymaps table<string, function(index: number): boolean> -- Return true to close menu
 function M.open(title, items, keymaps)
 	local buf = vim.api.nvim_create_buf(false, true)
 
 	-- Calculate size
 	local width = 60
 	local height = #items + 2
+	-- Limit height if too many items
+	if height > 20 then height = 20 end
+
 	local ui = vim.api.nvim_list_uis()[1]
 	local row = (ui.height - height) / 2
 	local col = (ui.width - width) / 2
@@ -30,19 +33,35 @@ function M.open(title, items, keymaps)
 	vim.bo[buf].modifiable = false
 	vim.bo[buf].filetype = "raddebugger_menu"
 
+	-- Highlight the current line
+	vim.api.nvim_win_set_option(win, "cursorline", true)
+
 	-- Keymaps
 	for key, fn in pairs(keymaps) do
 		vim.keymap.set("n", key, function()
 			local cursor_row = vim.api.nvim_win_get_cursor(win)[1]
-			fn(cursor_row)
-			-- Close on select?
-			-- vim.api.nvim_win_close(win, true)
-		end, { buffer = buf, nowait = true })
+
+			-- Execute callback
+			local should_close = fn(cursor_row)
+
+			-- Close if the callback returned true
+			if should_close then
+				if vim.api.nvim_win_is_valid(win) then
+					vim.api.nvim_win_close(win, true)
+				end
+			end
+		end, { buffer = buf, nowait = true, silent = true })
 	end
 
 	-- Close with q or Esc
-	vim.keymap.set("n", "q", function() vim.api.nvim_win_close(win, true) end, { buffer = buf })
-	vim.keymap.set("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, { buffer = buf })
+	local function close()
+		if vim.api.nvim_win_is_valid(win) then
+			vim.api.nvim_win_close(win, true)
+		end
+	end
+
+	vim.keymap.set("n", "q", close, { buffer = buf })
+	vim.keymap.set("n", "<Esc>", close, { buffer = buf })
 end
 
 return M
