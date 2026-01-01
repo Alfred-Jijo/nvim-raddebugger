@@ -8,12 +8,15 @@ local M = {}
 ---Helper: Try to find a valid target in CWD
 ---@return string|nil
 local function find_target()
+	-- Existing Project
 	local projects = vim.fn.glob("*.raddbg", false, true)
 	if #projects > 0 then return projects[1] end
 
+	-- Executable
 	local exes = vim.fn.glob("build/*.exe", false, true)
 	if #exes > 0 then return exes[1] end
 
+	-- Executable in root
 	exes = vim.fn.glob("*.exe", false, true)
 	if #exes > 0 then return exes[1] end
 
@@ -21,10 +24,12 @@ local function find_target()
 end
 
 function M.setup()
+	-- DUMB LAUNCH
 	vim.api.nvim_create_user_command("RaddebuggerLaunch", function(opts)
 		Exec.launch_gui(opts.args)
 	end, { nargs = "?", complete = "file" })
 
+	-- SMART LAUNCH: Finds file, Launches, Loads State
 	vim.api.nvim_create_user_command("RaddebuggerInit", function(opts)
 		local target = opts.args
 
@@ -32,19 +37,22 @@ function M.setup()
 		if target == "" or target == nil then
 			target = find_target()
 			if target then
-				vim.notify("Auto-detected target: " .. target, vim.log.levels.INFO)
-			else
-				vim.notify("No .raddbg or .exe found in CWD. Launching empty.", vim.log.levels.WARN)
+				vim.notify("Target found: " .. target, vim.log.levels.INFO)
 			end
 		end
 
+		-- Launch the GUI
 		Exec.launch_gui(target)
 
-		-- Load Internal Plugin State (if it's a project file)
-		-- This ensures the plugin knows about targets/breakpoints defined in the file
-		if target and target:match("%.raddbg$") then
-			Project.load(target)
-			Project.start_watching()
+		-- If we ended up with a project file, start watching it
+		if target then
+			local proj_file = target:gsub("%.exe$", ".raddbg")
+
+			-- Slight delay to let Raddbg create the file if it doesn't exist
+			vim.defer_fn(function()
+				Project.load(proj_file)
+				Project.start_watching()
+			end, 1000)
 		end
 	end, { nargs = "?", complete = "file" })
 

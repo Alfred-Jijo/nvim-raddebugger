@@ -29,7 +29,7 @@ local function cmd(action, args)
 end
 
 ---Launch the RadDebugger GUI Process
----@param path string|nil Path to executable or .raddbg project
+---@param path string|nil Path to .raddbg project (or .exe to auto-convert)
 function M.launch_gui(path)
 	local exe = vim.fn.exepath("raddbg")
 	if exe == "" then
@@ -37,26 +37,38 @@ function M.launch_gui(path)
 		return
 	end
 
-	-- Build the command using the absolute path
 	local cmd_args = { exe }
 
 	if path and path ~= "" then
-		local norm_path = Path.normalize(path)
-		table.insert(cmd_args, norm_path)
+		local project_path = path
+
+		-- If user passed an .exe, swap it to .raddbg
+		-- RadDebugger will create the project file
+		if project_path:match("%.exe$") then
+			project_path = project_path:gsub("%.exe$", ".raddbg")
+			vim.notify("Auto-creating project file: " .. project_path, vim.log.levels.INFO)
+		end
+
+		local norm_path = Path.normalize(project_path)
+
+		table.insert(cmd_args, "--project")
+		table.insert(cmd_args, ":" .. norm_path)
 	end
 
 	vim.notify("Spawning: " .. table.concat(cmd_args, " "), vim.log.levels.INFO)
 
+	-- Launch
+	-- disable stdout/stderr capturing because Windows GUI apps
+	-- often hang if a console tries to read their output pipes.
 	vim.system(cmd_args, {
 		detach = true,
-		text = true,
 		stdout = false,
 		stderr = false
 	}, function(obj)
 		if obj.code ~= 0 then
 			vim.schedule(function()
-				vim.notify("Exit Code: " .. obj.code .. " | Error: " .. (obj.stderr or ""),
-					vim.log.levels.ERROR)
+				-- If it fails immediately, notify user
+				vim.notify("RadDebugger Launch Error: Code " .. obj.code, vim.log.levels.ERROR)
 			end)
 		end
 	end)
@@ -64,7 +76,7 @@ function M.launch_gui(path)
 	State.set_idle()
 end
 
--- IPC Commands
+-- IPC Command Exports
 function M.continue() cmd("continue") end
 
 function M.run() cmd("run") end
