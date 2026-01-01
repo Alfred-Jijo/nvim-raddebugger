@@ -31,30 +31,36 @@ end
 ---Launch the RadDebugger GUI Process
 ---@param path string|nil Path to executable or .raddbg project
 function M.launch_gui(path)
-	local cmd_args = { "raddbg" }
+	local exe = vim.fn.exepath("raddbg")
+	if exe == "" then
+		vim.notify("Critical Error: 'raddbg' not found in PATH.", vim.log.levels.ERROR)
+		return
+	end
+
+	-- Build the command using the absolute path
+	local cmd_args = { exe }
 
 	if path and path ~= "" then
-		-- Normalize path for Windows (e.g. C:/Path/To/File.raddbg)
 		local norm_path = Path.normalize(path)
 		table.insert(cmd_args, norm_path)
 	end
 
-	vim.notify("Launching RadDebugger...", vim.log.levels.INFO)
+	vim.notify("Spawning: " .. table.concat(cmd_args, " "), vim.log.levels.INFO)
 
-	-- Spawn detached so Neovim doesn't freeze and doesn't own the process
 	vim.system(cmd_args, {
 		detach = true,
-		text = true -- Allows capturing stdout/err as text if needed
+		text = true,
+		stdout = false,
+		stderr = false
 	}, function(obj)
 		if obj.code ~= 0 then
 			vim.schedule(function()
-				vim.notify("Failed to launch GUI: " .. (obj.stderr or "Unknown Error"),
+				vim.notify("Exit Code: " .. obj.code .. " | Error: " .. (obj.stderr or ""),
 					vim.log.levels.ERROR)
 			end)
 		end
 	end)
 
-	-- Optimistically set state to IDLE (ready for connection)
 	State.set_idle()
 end
 
