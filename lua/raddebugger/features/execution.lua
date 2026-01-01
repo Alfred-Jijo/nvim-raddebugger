@@ -41,27 +41,42 @@ function M.ensure_gui_open(callback)
 
 			vim.notify("Launching RAD Debugger GUI...", vim.log.levels.INFO)
 
-			-- 'cmd /c start'
+			-- 'cmd /c start' is tricky with quotes.
+			-- Format: start "Title" "Path_to_Exe"
+			-- give it an empty title ("") so it doesn't treat the path as a window title.
+			-- wrap the path in quotes to handle spaces (e.g. "Program Files").
 			vim.system({ "cmd.exe", "/c", "start", "", exe }, {
 				detach = true,
+				stdout = false, -- Critical for Windows GUI detachment
+				stderr = false,
 			}, function()
 				-- Callback ignored because 'start' exits immediately
 			end)
 
-			-- Wait for initialization
-			-- Increased wait time to 2000ms to ensure the heavy GUI has time to initialize IPC
-			vim.defer_fn(function()
-				-- Double-check connection before proceeding
+			-- Wait loop: The GUI takes time to initialize its IPC pipe.
+			-- poll every 500ms, up to 10 times (5 seconds total).
+			local retries = 0
+			local max_retries = 10
+
+			local function poll()
 				IPC.exec({ "bring_to_front" }, function(ok)
 					if ok then
+						-- Success! GUI is up and IPC is listening.
 						if callback then callback() end
 					else
-						vim.notify(
-							"Launched RadDebugger, but IPC connection failed. Is it blocked?",
-							vim.log.levels.WARN)
+						retries = retries + 1
+						if retries < max_retries then
+							vim.defer_fn(poll, 500)
+						else
+							vim.notify("Timed out waiting for RadDebugger to start.",
+								vim.log.levels.WARN)
+						end
 					end
 				end)
-			end, 2000)
+			end
+
+			-- Initial delay before first poll to let the window appear
+			vim.defer_fn(poll, 1000)
 		end
 	end)
 end
