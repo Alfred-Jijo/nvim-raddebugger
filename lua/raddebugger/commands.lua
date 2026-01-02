@@ -3,13 +3,25 @@ local Breakpoints = require("raddebugger.features.breakpoints")
 local Targets = require("raddebugger.features.targets")
 local M = {}
 
----Helper: Try to find a valid executable in CWD
-local function find_target_exe()
-	-- Look for Executable (.exe) in build/
-	local exes = vim.fn.glob("build/*.exe", false, true)
+---Priority:
+--- 1. *.raddbg in current directory
+--- 2. *.raddbg in parent directory
+--- 3. *.exe in build/bin/ directory
+--- 4. *.exe in build/ directory
+--- 5. *.exe in current directory
+local function find_launch_target()
+	local projects = vim.fn.glob("*.raddbg", false, true)
+	if #projects > 0 then return projects[1] end
+
+	projects = vim.fn.glob("../*.raddbg", false, true)
+	if #projects > 0 then return projects[1] end
+
+	local exes = vim.fn.glob("build/bin/*.exe", false, true)
 	if #exes > 0 then return exes[1] end
 
-	-- Look for Executable (.exe) in root
+	exes = vim.fn.glob("build/*.exe", false, true)
+	if #exes > 0 then return exes[1] end
+
 	exes = vim.fn.glob("*.exe", false, true)
 	if #exes > 0 then return exes[1] end
 
@@ -32,17 +44,17 @@ function M.setup(opts)
 		end)
 	end, {})
 
-	-- Opens GUI -> Selects Target EXE -> Loads Breakpoints
+	-- Opens GUI -> Selects Target (Project or EXE) -> Loads Breakpoints
 	vim.api.nvim_create_user_command("RaddebuggerInit", function(cmd_opts)
 		local target = cmd_opts.args
 
 		-- Auto-Discovery
 		if target == "" or target == nil then
-			target = find_target_exe()
+			target = find_launch_target()
 		end
 
 		if not target then
-			vim.notify("No target exe found. Opening empty GUI.", vim.log.levels.WARN)
+			vim.notify("No .raddbg project or .exe found. Opening empty GUI.", vim.log.levels.WARN)
 			Exec.ensure_gui_open()
 		else
 			-- Launch and Attach via IPC
