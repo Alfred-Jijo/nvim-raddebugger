@@ -6,7 +6,7 @@ local IPC = require("raddebugger.core.ipc")
 local M = {}
 
 -- Plugin Version
-M._VERSION = "0.12.0"
+M._VERSION = "0.13.0"
 
 local default_config = {
 	project_file = nil, -- Auto-detect
