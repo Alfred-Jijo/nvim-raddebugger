@@ -13,7 +13,7 @@ local function cmd(action, args)
 		if not ok then
 			vim.notify("RAD IPC Error: " .. (msg or "Unknown"), vim.log.levels.ERROR)
 		else
-			-- Speculative state updates
+			-- Speculative state updates for UI responsiveness
 			if action == "run" or action == "continue" then State.set_running() end
 			if action == "pause" then State.set_paused() end
 			if action == "kill_all" then State.set_idle() end
@@ -22,51 +22,40 @@ local function cmd(action, args)
 end
 
 ---Ensure the RadDebugger GUI is running.
----Checks if running via IPC.
----If not, forces a DETACHED GUI launch via cmd start.
+---1. Checks if running via IPC.
+---2. If not, uses native OS shell to launch 'raddbg' from PATH.
+---3. Polls until IPC is ready.
 ---@param callback function Function to run once GUI is ready
 function M.ensure_gui_open(callback)
 	-- Check if already running by pinging "bring_to_front"
 	IPC.exec({ "bring_to_front" }, function(success)
 		if success then
-			-- Debugger is already alive
+			-- Debugger is already alive and listening
 			if callback then callback() end
 		else
 			-- Debugger is dead. Launch it.
-			local exe = vim.fn.exepath("raddbg")
-			if exe == "" then
-				vim.notify("Critical Error: 'raddbg' not found in PATH.", vim.log.levels.ERROR)
-				return
-			end
+			vim.notify("Launching RAD Debugger...", vim.log.levels.INFO)
 
-			vim.notify("Launching RAD Debugger GUI...", vim.log.levels.INFO)
+			-- 'start' launches a separate process and returns immediately.
+			-- '""' is the window title (required argument before the command).
+			-- "raddbg" relies on cmd.exe to find the executable in the system PATH.
+			os.execute('start "" "raddbg"')
 
-			-- 'cmd /c start' is tricky with quotes.
-			-- Format: start "Title" "Path_to_Exe"
-			-- give it an empty title ("") so it doesn't treat the path as a window title.
-			-- wrap the path in quotes to handle spaces (e.g. "Program Files").
-			vim.system({ "cmd.exe", "/c", "start", "", exe }, {
-				detach = true,
-				stdout = false, -- Critical for Windows GUI detachment
-				stderr = false,
-			}, function()
-				-- Callback ignored because 'start' exits immediately
-			end)
-
-			-- Wait loop: The GUI takes time to initialize its IPC pipe.
-			-- poll every 500ms, up to 10 times (5 seconds total).
-			local retries = 0
-			local max_retries = 10
+			-- Polling Loop: Wait for the GUI to initialize its IPC pipe.
+			-- The GUI needs a moment to start the message pump.
+			local attempts = 0
+			local max_attempts = 15 -- ~3 seconds total (15 * 200ms)
 
 			local function poll()
 				IPC.exec({ "bring_to_front" }, function(ok)
 					if ok then
-						-- Success! GUI is up and IPC is listening.
+						-- Success! The GUI is responding to IPC.
 						if callback then callback() end
 					else
-						retries = retries + 1
-						if retries < max_retries then
-							vim.defer_fn(poll, 500)
+						attempts = attempts + 1
+						if attempts < max_attempts then
+							-- Retry after 200ms
+							vim.defer_fn(poll, 200)
 						else
 							vim.notify("Timed out waiting for RadDebugger to start.",
 								vim.log.levels.WARN)
@@ -75,8 +64,8 @@ function M.ensure_gui_open(callback)
 				end)
 			end
 
-			-- Initial delay before first poll to let the window appear
-			vim.defer_fn(poll, 1000)
+			-- Start polling after a short initial delay to let Windows spawn the window
+			vim.defer_fn(poll, 200)
 		end
 	end)
 end
@@ -90,7 +79,7 @@ function M.launch_and_attach(path_to_exe)
 		local abs_path = Path.normalize(path_to_exe)
 		vim.notify("Attaching to: " .. abs_path, vim.log.levels.INFO)
 
-		-- Tell existing window to switch targets
+		-- Tell window to switch targets
 		IPC.exec({ "select_target", abs_path }, function(ok, msg)
 			if ok then
 				State.set_idle()
