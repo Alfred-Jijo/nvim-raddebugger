@@ -7,7 +7,7 @@ local Project = require("raddebugger.core.project")
 local M = {}
 
 -- Plugin Version
-M._VERSION = "0.16.2"
+M._VERSION = "0.16.3"
 
 local default_config = {
 	project_file = nil, -- Auto-detect
@@ -64,16 +64,16 @@ function M.setup(opts)
 		vim.notify("RAD Debugger (raddbg) not found in PATH", vim.log.levels.WARN)
 	end
 
-	-- Auto-load project if found
-	local project_to_load = opts.project_file or Project:find_raddbg(vim.fn.getcwd())
-
-	if project_to_load then
-		-- Schedule init to run after startup so UI is ready
-		vim.schedule(function()
-			-- Pass the full path to our smart Init command
-			vim.cmd("RaddebuggerInit " .. vim.fn.fnameescape(project_to_load))
-		end)
-	end
+	-- -- Auto-load project if found
+	-- local project_to_load = opts.project_file or Project:find_raddbg(vim.fn.getcwd())
+	--
+	-- if project_to_load then
+	-- 	-- Schedule init to run after startup so UI is ready
+	-- 	vim.schedule(function()
+	-- 		-- Pass the full path to our smart Init command
+	-- 		vim.cmd("RaddebuggerInit " .. vim.fn.fnameescape(project_to_load))
+	-- 	end)
+	-- end
 end
 
 function M.statusline_component()
