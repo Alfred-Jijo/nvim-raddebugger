@@ -33,27 +33,27 @@ function M.setup(opts)
 		vim.notify("nvim-raddebugger v" .. ver, vim.log.levels.INFO)
 	end, {})
 
-	-- Just opens the GUI (or focuses it).
-	vim.api.nvim_create_user_command("RaddebuggerGUI", function()
-		Exec.ensure_gui_open(function()
-			vim.notify("RAD Debugger is ready.", vim.log.levels.INFO)
-		end)
-	end, {})
-
-	-- Opens GUI -> Selects Target (Project or EXE) -> Loads Breakpoints
-	vim.api.nvim_create_user_command("RaddebuggerInit", function(cmd_opts)
-		local target = cmd_opts.args
-		if target == "" or target == nil then
-			target = find_launch_target()
-		end
-
-		if not target then
-			vim.notify("No .raddbg project or .exe found. Opening empty GUI.", vim.log.levels.WARN)
-			Exec.ensure_gui_open()
-		else
-			Exec.launch_and_attach(target)
-		end
-	end, { nargs = "?", complete = "file" })
+	-- -- Just opens the GUI (or focuses it).
+	-- vim.api.nvim_create_user_command("RaddebuggerGUI", function()
+	-- 	Exec.ensure_gui_open(function()
+	-- 		vim.notify("RAD Debugger is ready.", vim.log.levels.INFO)
+	-- 	end)
+	-- end, {})
+	--
+	-- -- Opens GUI -> Selects Target (Project or EXE) -> Loads Breakpoints
+	-- vim.api.nvim_create_user_command("RaddebuggerInit", function(cmd_opts)
+	-- 	local target = cmd_opts.args
+	-- 	if target == "" or target == nil then
+	-- 		target = find_launch_target()
+	-- 	end
+	--
+	-- 	if not target then
+	-- 		vim.notify("No .raddbg project or .exe found. Opening empty GUI.", vim.log.levels.WARN)
+	-- 		Exec.ensure_gui_open()
+	-- 	else
+	-- 		Exec.launch_and_attach(target)
+	-- 	end
+	-- end, { nargs = "?", complete = "file" })
 
 	-- Standard Controls
 	vim.api.nvim_create_user_command("RaddebuggerToggleBreakpoint", function()
