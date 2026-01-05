@@ -7,44 +7,41 @@ local M = {}
 
 function M.show_menu()
 	-- Safety check: Ensure project data is loaded
-	if not Project.data or not Project.data.targets or #Project.data.targets == 0 then
+	local targets = Project:get_targets()
+	if not targets or #targets == 0 then
 		vim.notify("No targets found in project file", vim.log.levels.WARN)
 		return
 	end
 
-	-- Prepare list for display
+	-- Prepare list for display (Format: "[x] label: path")
 	local lines = {}
-	for _, t in ipairs(Project.data.targets) do
-		-- TODO: If we parse 'enabled' status in project.lua, we could show [x] here
-		table.insert(lines, "  " .. t)
+	for _, t in ipairs(targets) do
+		local state = t.enabled and "[x]" or "[ ]"
+		local label = t.label or "unnamed"
+		-- Truncate executable path for display
+		local exe_name = vim.fn.fnamemodify(t.executable, ":t")
+
+		table.insert(lines, string.format("%s %s (%s)", state, label, exe_name))
 	end
 
 	Menu.open("Select Target", lines, {
 		-- SELECT: Switch to this target and close menu
 		["<CR>"] = function(idx)
-			local t = Project.data.targets[idx]
+			local t = targets[idx]
 			if t then
-				-- Use our smart launch/attach logic
-				Exec.launch_and_attach(t)
+				-- Pass the actual executable path to the launcher
+				Exec.launch_and_attach(t.executable)
 				return true -- Return true to signal "Close Menu"
 			end
 		end,
 
-		-- ENABLE: Send IPC command, keep menu open to see result
+		-- ENABLE: Send IPC command, keep menu open
 		["h"] = function(idx)
-			local t = Project.data.targets[idx]
-			IPC.exec({ "enable_target", t }, function()
-				vim.notify("Enabled: " .. t)
-			end)
-			return false -- Keep menu open
-		end,
-
-		-- DISABLE: Send IPC command, keep menu open
-		["l"] = function(idx)
-			local t = Project.data.targets[idx]
-			IPC.exec({ "disable_target", t }, function()
-				vim.notify("Disabled: " .. t)
-			end)
+			local t = targets[idx]
+			if t then
+				-- notify for now
+				vim.notify("Target info: " .. t.executable)
+			end
 			return false
 		end,
 	})

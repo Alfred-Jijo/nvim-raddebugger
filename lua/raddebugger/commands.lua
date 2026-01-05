@@ -3,26 +3,8 @@ local Breakpoints = require("raddebugger.features.breakpoints")
 local Targets = require("raddebugger.features.targets")
 local IPC = require("raddebugger.core.ipc")
 local Path = require("raddebugger.utils.path")
+local Project = require("raddebugger.core.project")
 local M = {}
-
-local function find_launch_target()
-	local projects = vim.fn.glob("*.raddbg", false, true)
-	if #projects > 0 then return projects[1] end
-
-	projects = vim.fn.glob("../*.raddbg", false, true)
-	if #projects > 0 then return projects[1] end
-
-	local exes = vim.fn.glob("build/bin/*.exe", false, true)
-	if #exes > 0 then return exes[1] end
-
-	exes = vim.fn.glob("build/*.exe", false, true)
-	if #exes > 0 then return exes[1] end
-
-	exes = vim.fn.glob("*.exe", false, true)
-	if #exes > 0 then return exes[1] end
-
-	return nil
-end
 
 function M.setup(opts)
 	opts = opts or {}
@@ -33,29 +15,72 @@ function M.setup(opts)
 		vim.notify("nvim-raddebugger v" .. ver, vim.log.levels.INFO)
 	end, {})
 
-	-- Just opens the GUI (or focuses it).
+	-- Just opens the GUI
 	vim.api.nvim_create_user_command("RaddebuggerGUI", function()
 		Exec.ensure_gui_open(function()
 			vim.notify("RAD Debugger is ready.", vim.log.levels.INFO)
 		end)
 	end, {})
 
-	-- Opens GUI -> Selects Target (Project or EXE) -> Loads Breakpoints
+	-- MAIN INIT: Uses Project Parser
 	vim.api.nvim_create_user_command("RaddebuggerInit", function(cmd_opts)
-		local target = cmd_opts.args
-		if target == "" or target == nil then
-			target = find_launch_target()
+		local arg = cmd_opts.args
+		local project_file = nil
+		local exe_file = nil
+
+		-- Determine Input
+		if arg ~= "" and arg ~= nil then
+			-- User provided an argument
+			if arg:match("%.raddbg$") then
+				project_file = arg
+			elseif arg:match("%.exe$") then
+				exe_file = arg
+			end
+		else
+			-- Auto-discovery
+			project_file = Project:find_raddbg(vim.fn.getcwd())
+			if not project_file then
+				-- Fallback to finding an exe if no project file
+				local exes = vim.fn.glob("build/*.exe", false, true)
+				if #exes > 0 then exe_file = exes[1] end
+			end
 		end
 
-		if not target then
-			vim.notify("No .raddbg project or .exe found. Opening empty GUI.", vim.log.levels.WARN)
-			Exec.ensure_gui_open()
-		else
-			Exec.launch_and_attach(target)
+		-- Handle Project File
+		if project_file then
+			vim.notify("Loading project: " .. project_file, vim.log.levels.INFO)
+			local ok, data = Project:init(project_file, function(new_data)
+				vim.notify("Project file changed on disk.", vim.log.levels.INFO)
+			end)
+
+			if ok then
+				-- Import Breakpoints from Project
+				Breakpoints.load_from_project(Project:get_breakpoints())
+
+				local targets = Project:get_targets()
+				if #targets > 0 then
+					Exec.launch_and_attach(targets[1].executable)
+				else
+					Exec.ensure_gui_open()
+				end
+			else
+				vim.notify("Failed to parse project: " .. tostring(data), vim.log.levels.ERROR)
+			end
+			return
 		end
+
+		-- Handle Raw Executable
+		if exe_file then
+			Exec.launch_and_attach(exe_file)
+			return
+		end
+
+		-- Fallback
+		vim.notify("No .raddbg project or .exe found.", vim.log.levels.WARN)
+		Exec.ensure_gui_open()
 	end, { nargs = "?", complete = "file" })
 
-	-- Standard Controls
+	-- Standard Controls (Unchanged)
 	vim.api.nvim_create_user_command("RaddebuggerToggleBreakpoint", function()
 		local file = vim.api.nvim_buf_get_name(0)
 		local line = vim.api.nvim_win_get_cursor(0)[1]
@@ -72,67 +97,30 @@ function M.setup(opts)
 	vim.api.nvim_create_user_command("RaddebuggerStepInto", Exec.step_into, {})
 	vim.api.nvim_create_user_command("RaddebuggerStepOut", Exec.step_out, {})
 
-	-- Watch the word under the cursor
 	vim.api.nvim_create_user_command("RaddebuggerWatch", function()
 		local word = vim.fn.expand("<cword>")
 		if word and word ~= "" then
-			IPC.exec({ "toggle_watch_expr", word }, function(ok, msg)
-				if ok then
-					vim.notify("RAD: Watching '" .. word .. "'", vim.log.levels.INFO)
-				else
-					vim.notify("RAD Error: " .. (msg or "Unknown"), vim.log.levels.ERROR)
-				end
-			end)
-		else
-			vim.notify("No word under cursor to watch", vim.log.levels.WARN)
+			IPC.exec({ "toggle_watch_expr", word })
 		end
 	end, {})
 
-	-- Focus RadDebugger on the current file/line
 	vim.api.nvim_create_user_command("RaddebuggerFocus", function()
 		local file = vim.api.nvim_buf_get_name(0)
 		local line = vim.api.nvim_win_get_cursor(0)[1]
 		local loc = Path.format_for_raddbg(file, line)
-		
-		IPC.exec({ "open_file", loc }, function(ok, msg)
-			if not ok then
-				vim.notify("RAD Focus Error: " .. (msg or "Unknown"), vim.log.levels.ERROR)
-			end
-		end)
+		IPC.exec({ "open_file", loc })
 	end, {})
 
-	-- Run to Cursor
 	vim.api.nvim_create_user_command("RaddebuggerRunToCursor", function()
 		local file = vim.api.nvim_buf_get_name(0)
 		local line = vim.api.nvim_win_get_cursor(0)[1]
 		local loc = Path.format_for_raddbg(file, line)
-
-		IPC.exec({ "run_to_line", loc }, function(ok, msg)
-			if ok then 
-				vim.notify("Running to cursor...", vim.log.levels.INFO) 
-			else
-				vim.notify("RAD Error: " .. (msg or "Unknown"), vim.log.levels.ERROR)
-			end
-		end)
+		IPC.exec({ "run_to_line", loc })
 	end, {})
 
-	-- Save Project and User settings (Sequentially)
 	vim.api.nvim_create_user_command("RaddebuggerSave", function()
-		vim.notify("Saving RAD settings...", vim.log.levels.INFO)
-		
-		IPC.exec({ "save_project" }, function(ok_proj, msg_proj)
-			if not ok_proj then
-				vim.notify("Failed to save project: " .. (msg_proj or ""), vim.log.levels.ERROR)
-				return
-			end
-			
-			IPC.exec({ "save_user" }, function(ok_user, msg_user)
-				if not ok_user then
-					vim.notify("Failed to save user settings: " .. (msg_user or ""), vim.log.levels.ERROR)
-				else
-					vim.notify("Saved RadDebugger settings.", vim.log.levels.INFO)
-				end
-			end)
+		IPC.exec({ "save_project" }, function(ok)
+			if ok then IPC.exec({ "save_user" }) end
 		end)
 	end, {})
 end

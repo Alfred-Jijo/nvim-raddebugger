@@ -3,21 +3,37 @@ local Path = require("raddebugger.utils.path")
 local M = {}
 local ns_id = vim.api.nvim_create_namespace("raddebugger_breakpoints")
 
--- Internal list of breakpoints
--- Format: { { path = "C:/...", line = 10 }, ... }
+-- Internal list
 M.list = {}
+
+---Import breakpoints parsed from project.lua
+---@param project_bps table[] Array of {path, line, hit_count, ...}
+function M.load_from_project(project_bps)
+	if not project_bps then return end
+
+	M.list = {}
+
+	for _, bp in ipairs(project_bps) do
+		table.insert(M.list, {
+			path = bp.path,
+			line = bp.line,
+			hit_count = bp.hit_count
+		})
+	end
+
+	M.refresh_signs()
+	vim.notify("Loaded " .. #M.list .. " breakpoints from project.", vim.log.levels.INFO)
+end
 
 ---Re-send all active breakpoints to the debugger via IPC
 function M.resend_all()
 	if #M.list == 0 then return end
-
 	for _, bp in ipairs(M.list) do
 		local loc = Path.format_for_raddbg(bp.path, bp.line)
 		IPC.exec({ "add_breakpoint", loc }, function(ok) end)
 	end
 end
 
----Clear ALL breakpoints in both Neovim and RadDebugger
 function M.clear_all()
 	IPC.exec({ "clear_breakpoints" }, function(ok)
 		if ok then
@@ -30,7 +46,6 @@ end
 
 function M.toggle(file, line)
 	file = Path.normalize(file)
-
 	local idx = nil
 	for i, bp in ipairs(M.list) do
 		if bp.path == file and bp.line == line then
@@ -46,7 +61,6 @@ function M.toggle(file, line)
 			if ok then
 				table.remove(M.list, idx)
 				M.refresh_signs()
-				vim.notify("Breakpoint removed", vim.log.levels.INFO)
 			end
 		end)
 	else
@@ -55,7 +69,6 @@ function M.toggle(file, line)
 			if ok then
 				table.insert(M.list, { path = file, line = line })
 				M.refresh_signs()
-				vim.notify("Breakpoint set", vim.log.levels.INFO)
 			end
 		end)
 	end
