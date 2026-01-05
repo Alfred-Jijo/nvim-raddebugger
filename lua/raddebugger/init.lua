@@ -6,7 +6,7 @@ local IPC = require("raddebugger.core.ipc")
 local M = {}
 
 -- Plugin Version
-M._VERSION = "0.15.0"
+M._VERSION = "0.15.2"
 
 local default_config = {
 	project_file = nil, -- Auto-detect
@@ -19,6 +19,7 @@ local default_config = {
 		step_over         = "<F10>",
 		step_into         = "<F11>",
 		step_out          = "<S-F11>",
+		run_to_cursor     = "<C-F10>",
 		stop              = "<S-F5>",
 		target_menu       = nil,
 	},
@@ -48,12 +49,13 @@ local function apply_keymaps(keymaps)
 	end
 
 	map(keymaps.toggle_breakpoint, "<cmd>RaddebuggerToggleBreakpoint<CR>", "Toggle Breakpoint")
-	map(keymaps.continue, "<cmd>RaddebuggerContinue<CR>", "Continue/Run")
-	map(keymaps.step_over, "<cmd>RaddebuggerStepOver<CR>", "Step Over")
-	map(keymaps.step_into, "<cmd>RaddebuggerStepInto<CR>", "Step Into")
-	map(keymaps.step_out, "<cmd>RaddebuggerStepOut<CR>", "Step Out")
-	map(keymaps.stop, "<cmd>RaddebuggerKill<CR>", "Stop/Kill")
-	map(keymaps.target_menu, "<cmd>RaddebuggerTargetMenu<CR>", "Targets Menu")
+	map(keymaps.continue,          "<cmd>RaddebuggerContinue<CR>",         "Continue/Run")
+	map(keymaps.step_over,         "<cmd>RaddebuggerStepOver<CR>",         "Step Over")
+	map(keymaps.step_into,         "<cmd>RaddebuggerStepInto<CR>",         "Step Into")
+	map(keymaps.step_out,          "<cmd>RaddebuggerStepOut<CR>",          "Step Out")
+	map(keymaps.run_to_cursor,     "<cmd>RaddebuggerRunToCursor<CR>",      "Run to Cursor")
+	map(keymaps.stop,              "<cmd>RaddebuggerKill<CR>",             "Stop/Kill")
+	map(keymaps.target_menu,       "<cmd>RaddebuggerTargetMenu<CR>",       "Targets Menu")
 end
 
 ---Initialize the plugin

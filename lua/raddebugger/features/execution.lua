@@ -1,84 +1,114 @@
+local Exec = require("raddebugger.features.execution")
+local Breakpoints = require("raddebugger.features.breakpoints")
+local Targets = require("raddebugger.features.targets")
 local IPC = require("raddebugger.core.ipc")
-local State = require("raddebugger.core.state")
 local Path = require("raddebugger.utils.path")
 local M = {}
 
--- Send simple IPC commands (run, step, etc.)
-local function cmd(action, args)
-	local ipc_args = { action }
-	if args then
-		for _, v in ipairs(args) do table.insert(ipc_args, v) end
-	end
-	IPC.exec(ipc_args, function(ok, msg)
-		if not ok then
-			vim.notify("RAD IPC Error: " .. (msg or "Unknown"), vim.log.levels.ERROR)
-		else
-			-- Speculative state updates for UI responsiveness
-			if action == "run" or action == "continue" then State.set_running() end
-			if action == "pause" then State.set_paused() end
-			if action == "kill_all" then State.set_idle() end
-			if action == "restart" then State.set_running() end
-		end
-	end)
+local function find_launch_target()
+	local projects = vim.fn.glob("*.raddbg", false, true)
+	if #projects > 0 then return projects[1] end
+
+	projects = vim.fn.glob("../*.raddbg", false, true)
+	if #projects > 0 then return projects[1] end
+
+	local exes = vim.fn.glob("build/bin/*.exe", false, true)
+	if #exes > 0 then return exes[1] end
+
+	exes = vim.fn.glob("build/*.exe", false, true)
+	if #exes > 0 then return exes[1] end
+
+	exes = vim.fn.glob("*.exe", false, true)
+	if #exes > 0 then return exes[1] end
+
+	return nil
 end
 
----Check if RadDebugger is running.
----If YES: Run callback.
----If NO: Notify user to launch it manually.
----@param callback function Function to run if connected
-function M.ensure_gui_open(callback)
-	IPC.exec({ "bring_to_front" }, function(success)
-		if success then
-			if callback then callback() end
-		else
-			vim.schedule(function()
-				local msg = "!! RadDebugger is not running.\n\n" ..
-				            "Please launch 'raddbg.exe' manually, then run this command again."
-				vim.notify(msg, vim.log.levels.ERROR)
-			end)
-		end
-	end)
-end
+function M.setup(opts)
+	opts = opts or {}
 
----Connect to existing GUI and select the target executable
----@param path_to_exe string
-function M.launch_and_attach(path_to_exe)
-	M.ensure_gui_open(function()
-		if not path_to_exe or path_to_exe == "" then return end
+	-- Version
+	vim.api.nvim_create_user_command("RaddebuggerVersion", function()
+		local ver = opts.version or "unknown"
+		vim.notify("nvim-raddebugger v" .. ver, vim.log.levels.INFO)
+	end, {})
 
-		local abs_path = Path.normalize(path_to_exe)
-		vim.notify("Attaching to: " .. abs_path, vim.log.levels.INFO)
-
-		-- Tell existing window to switch targets
-		IPC.exec({ "select_target", abs_path }, function(ok, msg)
-			if ok then
-				State.set_idle()
-				vim.notify("Target selected successfully.", vim.log.levels.INFO)
-
-				-- Sync Breakpoints from Neovim -> RadDebugger
-				require("raddebugger.features.breakpoints").resend_all()
-			else
-				vim.notify("Failed to select target: " .. (msg or "IPC Error"), vim.log.levels.ERROR)
-			end
+	-- Just opens the GUI (or focuses it).
+	vim.api.nvim_create_user_command("RaddebuggerGUI", function()
+		Exec.ensure_gui_open(function()
+			vim.notify("RAD Debugger is ready.", vim.log.levels.INFO)
 		end)
-	end)
+	end, {})
+
+	-- Opens GUI -> Selects Target (Project or EXE) -> Loads Breakpoints
+	vim.api.nvim_create_user_command("RaddebuggerInit", function(cmd_opts)
+		local target = cmd_opts.args
+		if target == "" or target == nil then
+			target = find_launch_target()
+		end
+
+		if not target then
+			vim.notify("No .raddbg project or .exe found. Opening empty GUI.", vim.log.levels.WARN)
+			Exec.ensure_gui_open()
+		else
+			Exec.launch_and_attach(target)
+		end
+	end, { nargs = "?", complete = "file" })
+
+	-- Standard Controls
+	vim.api.nvim_create_user_command("RaddebuggerToggleBreakpoint", function()
+		local file = vim.api.nvim_buf_get_name(0)
+		local line = vim.api.nvim_win_get_cursor(0)[1]
+		Breakpoints.toggle(file, line)
+	end, {})
+
+	vim.api.nvim_create_user_command("RaddebuggerClearBreakpoints", Breakpoints.clear_all, {})
+	vim.api.nvim_create_user_command("RaddebuggerTargetMenu", Targets.show_menu, {})
+	vim.api.nvim_create_user_command("RaddebuggerContinue", Exec.continue, {})
+	vim.api.nvim_create_user_command("RaddebuggerRun", Exec.run, {})
+	vim.api.nvim_create_user_command("RaddebuggerRestart", Exec.restart, {})
+	vim.api.nvim_create_user_command("RaddebuggerKill", Exec.kill, {})
+	vim.api.nvim_create_user_command("RaddebuggerStepOver", Exec.step_over, {})
+	vim.api.nvim_create_user_command("RaddebuggerStepInto", Exec.step_into, {})
+	vim.api.nvim_create_user_command("RaddebuggerStepOut", Exec.step_out, {})
+
+	-- Watch the word under the cursor
+	vim.api.nvim_create_user_command("RaddebuggerWatch", function()
+		local word = vim.fn.expand("<cword>")
+		if word and word ~= "" then
+			IPC.exec({ "toggle_watch_expr", word }, function(ok)
+				if ok then vim.notify("RAD: Watching '" .. word .. "'", vim.log.levels.INFO) end
+			end)
+		else
+			vim.notify("No word under cursor to watch", vim.log.levels.WARN)
+		end
+	end, {})
+
+	-- Focus RadDebugger on the current file/line
+	vim.api.nvim_create_user_command("RaddebuggerFocus", function()
+		local file = vim.api.nvim_buf_get_name(0)
+		local line = vim.api.nvim_win_get_cursor(0)[1]
+		local loc = Path.format_for_raddbg(file, line)
+		IPC.exec({ "open_file", loc })
+	end, {})
+
+	-- Run to Cursor (Execute until current line is hit)
+	vim.api.nvim_create_user_command("RaddebuggerRunToCursor", function()
+		local file = vim.api.nvim_buf_get_name(0)
+		local line = vim.api.nvim_win_get_cursor(0)[1]
+		local loc = Path.format_for_raddbg(file, line)
+
+		IPC.exec({ "run_to_line", loc }, function(ok)
+			if ok then vim.notify("Running to cursor...", vim.log.levels.INFO) end
+		end)
+	end, {})
+
+	-- Save Project and User settings
+	vim.api.nvim_create_user_command("RaddebuggerSave", function()
+		IPC.exec({ "save_project" })
+		IPC.exec({ "save_user" })
+		vim.notify("Saved RadDebugger settings.", vim.log.levels.INFO)
+	end, {})
 end
-
--- Standard Controls
-function M.continue() cmd("continue") end
-
-function M.run() cmd("run") end
-
-function M.kill() cmd("kill_all") end
-
-function M.restart() cmd("restart") end
-
-function M.pause() cmd("pause") end
-
-function M.step_over() cmd("step_over") end
-
-function M.step_into() cmd("step_into") end
-
-function M.step_out() cmd("step_out") end
 
 return M
