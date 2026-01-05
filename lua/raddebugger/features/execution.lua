@@ -17,6 +17,7 @@ local function cmd(action, args)
 			if action == "run" or action == "continue" then State.set_running() end
 			if action == "pause" then State.set_paused() end
 			if action == "kill_all" then State.set_idle() end
+			if action == "restart" then State.set_running() end
 		end
 	end)
 end
@@ -26,16 +27,13 @@ end
 ---If NO: Notify user to launch it manually.
 ---@param callback function Function to run if connected
 function M.ensure_gui_open(callback)
-	-- We simply try to ping the window.
 	IPC.exec({ "bring_to_front" }, function(success)
 		if success then
-			-- It's alive! Proceed.
 			if callback then callback() end
 		else
-			-- It's dead. We do NOT try to launch it anymore.
 			vim.schedule(function()
 				local msg = "!! RadDebugger is not running.\n\n" ..
-				    "Please launch 'raddbg.exe' manually, then run this command again."
+				            "Please launch 'raddbg.exe' manually, then run this command again."
 				vim.notify(msg, vim.log.levels.ERROR)
 			end)
 		end
@@ -73,6 +71,8 @@ function M.run() cmd("run") end
 
 function M.kill() cmd("kill_all") end
 
+function M.restart() cmd("restart") end
+
 function M.pause() cmd("pause") end
 
 function M.step_over() cmd("step_over") end
@@ -80,7 +80,5 @@ function M.step_over() cmd("step_over") end
 function M.step_into() cmd("step_into") end
 
 function M.step_out() cmd("step_out") end
-
-function M.restart() cmd("restart") end
 
 return M

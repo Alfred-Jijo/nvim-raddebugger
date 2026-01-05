@@ -8,17 +8,24 @@ local ns_id = vim.api.nvim_create_namespace("raddebugger_breakpoints")
 M.list = {}
 
 ---Re-send all active breakpoints to the debugger via IPC
----Useful after a fresh launch or attach.
 function M.resend_all()
 	if #M.list == 0 then return end
 
-	-- We don't notify here to avoid spamming the user
 	for _, bp in ipairs(M.list) do
 		local loc = Path.format_for_raddbg(bp.path, bp.line)
-		IPC.exec({ "add_breakpoint", loc }, function(ok)
-			-- Silently fail or succeed
-		end)
+		IPC.exec({ "add_breakpoint", loc }, function(ok) end)
 	end
+end
+
+---Clear ALL breakpoints in both Neovim and RadDebugger
+function M.clear_all()
+	IPC.exec({ "clear_breakpoints" }, function(ok)
+		if ok then
+			M.list = {}
+			M.refresh_signs()
+			vim.notify("All breakpoints cleared.", vim.log.levels.INFO)
+		end
+	end)
 end
 
 function M.toggle(file, line)
@@ -69,17 +76,6 @@ function M.refresh_signs()
 			})
 		end
 	end
-end
-
--- Add this function
-function M.clear_all()
-    IPC.exec({"clear_breakpoints"}, function(ok)
-        if ok then
-            M.list = {} -- Clear internal Lua list
-            M.refresh_signs() -- Remove red dots
-            vim.notify("All breakpoints cleared in RadDebugger.", vim.log.levels.INFO)
-        end
-    end)
 end
 
 vim.api.nvim_create_autocmd({ "BufEnter" }, { callback = function() M.refresh_signs() end })
