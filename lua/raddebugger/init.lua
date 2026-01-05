@@ -2,17 +2,17 @@ local Commands = require("raddebugger.commands")
 local Signs = require("raddebugger.ui.signs")
 local State = require("raddebugger.core.state")
 local IPC = require("raddebugger.core.ipc")
+local Project = require("raddebugger.core.project")
 
 local M = {}
 
 -- Plugin Version
-M._VERSION = "0.16.1"
+M._VERSION = "0.16.2"
 
 local default_config = {
 	project_file = nil, -- Auto-detect
 
 	-- Keymaps (Visual Studio Style Defaults)
-	-- Set any key to false to disable it
 	keymaps = {
 		toggle_breakpoint = "<F9>",
 		continue          = "<F5>",
@@ -30,14 +30,6 @@ local default_config = {
 	debounce_ms = 500
 }
 
----Attempt to find a .raddbg file in the current working directory
-local function find_project_file()
-	local cwd = vim.fn.getcwd()
-	local files = vim.fn.glob(cwd .. "/*.raddbg", false, true)
-	if #files > 0 then return files[1] end
-	return nil
-end
-
 ---Apply keymaps based on config
 local function apply_keymaps(keymaps)
 	if keymaps == false then return end
@@ -48,14 +40,14 @@ local function apply_keymaps(keymaps)
 		end
 	end
 
-	map(keymaps.toggle_breakpoint, "<cmd>RaddebuggerToggleBreakpoint<CR>", "Toggle Breakpoint")
-	map(keymaps.continue,          "<cmd>RaddebuggerContinue<CR>",         "Continue/Run")
-	map(keymaps.step_over,         "<cmd>RaddebuggerStepOver<CR>",         "Step Over")
-	map(keymaps.step_into,         "<cmd>RaddebuggerStepInto<CR>",         "Step Into")
-	map(keymaps.step_out,          "<cmd>RaddebuggerStepOut<CR>",          "Step Out")
-	map(keymaps.run_to_cursor,     "<cmd>RaddebuggerRunToCursor<CR>",      "Run to Cursor")
-	map(keymaps.stop,              "<cmd>RaddebuggerKill<CR>",             "Stop/Kill")
-	map(keymaps.target_menu,       "<cmd>RaddebuggerTargetMenu<CR>",       "Targets Menu")
+	map(keymaps.toggle_breakpoint, 	"<cmd>RaddebuggerToggleBreakpoint<CR>", "Toggle Breakpoint")
+	map(keymaps.continue,		"<cmd>RaddebuggerContinue<CR>", 	"Continue/Run")
+	map(keymaps.step_over, 		"<cmd>RaddebuggerStepOver<CR>", 	"Step Over")
+	map(keymaps.step_into, 		"<cmd>RaddebuggerStepInto<CR>", 	"Step Into")
+	map(keymaps.step_out, 		"<cmd>RaddebuggerStepOut<CR>", 		"Step Out")
+	map(keymaps.run_to_cursor, 	"<cmd>RaddebuggerRunToCursor<CR>", 	"Run to Cursor")
+	map(keymaps.stop, 		"<cmd>RaddebuggerKill<CR>", 		"Stop/Kill")
+	map(keymaps.target_menu, 	"<cmd>RaddebuggerTargetMenu<CR>", 	"Targets Menu")
 end
 
 ---Initialize the plugin
@@ -73,11 +65,13 @@ function M.setup(opts)
 	end
 
 	-- Auto-load project if found
-	local project_to_load = opts.project_file or find_project_file()
+	local project_to_load = opts.project_file or Project:find_raddbg(vim.fn.getcwd())
+
 	if project_to_load then
-		-- Schedule init to run after startup
+		-- Schedule init to run after startup so UI is ready
 		vim.schedule(function()
-			vim.cmd("RaddebuggerInit " .. project_to_load)
+			-- Pass the full path to our smart Init command
+			vim.cmd("RaddebuggerInit " .. vim.fn.fnameescape(project_to_load))
 		end)
 	end
 end
