@@ -71,6 +71,17 @@ function M.refresh_signs()
 	end
 end
 
+-- Add this function
+function M.clear_all()
+    IPC.exec({"clear_breakpoints"}, function(ok)
+        if ok then
+            M.list = {} -- Clear internal Lua list
+            M.refresh_signs() -- Remove red dots
+            vim.notify("All breakpoints cleared in RadDebugger.", vim.log.levels.INFO)
+        end
+    end)
+end
+
 vim.api.nvim_create_autocmd({ "BufEnter" }, { callback = function() M.refresh_signs() end })
 
 return M

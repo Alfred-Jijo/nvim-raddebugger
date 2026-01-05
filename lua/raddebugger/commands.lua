@@ -69,6 +69,26 @@ function M.setup(opts)
 		Breakpoints.toggle(file, line)
 	end, {})
 
+	vim.api.nvim_create_user_command("RaddebuggerWatch", function()
+		-- Get word under cursor
+		local word = vim.fn.expand("<cword>")
+		if word and word ~= "" then
+			-- Send to RAD
+			IPC.exec({ "toggle_watch_expr", word }, function(ok)
+				if ok then vim.notify("Added to Watch: " .. word) end
+			end)
+		end
+	end, {})
+	vim.api.nvim_create_user_command("RaddebuggerFocus", function()
+		local file = vim.api.nvim_buf_get_name(0)
+		local line = vim.api.nvim_win_get_cursor(0)[1]
+		local loc = require("raddebugger.utils.path").format_for_raddbg(file, line)
+
+		IPC.exec({ "open_file", loc }, function(ok)
+			-- This forces RadDebugger to jump to where YOU are in Neovim
+		end)
+	end, {})
+
 	vim.api.nvim_create_user_command("RaddebuggerTargetMenu", Targets.show_menu, {})
 	vim.api.nvim_create_user_command("RaddebuggerContinue", Exec.continue, {})
 	vim.api.nvim_create_user_command("RaddebuggerRun", Exec.run, {})
