@@ -33,27 +33,27 @@ function M.setup(opts)
 		vim.notify("nvim-raddebugger v" .. ver, vim.log.levels.INFO)
 	end, {})
 
-	-- -- Just opens the GUI (or focuses it).
-	-- vim.api.nvim_create_user_command("RaddebuggerGUI", function()
-	-- 	Exec.ensure_gui_open(function()
-	-- 		vim.notify("RAD Debugger is ready.", vim.log.levels.INFO)
-	-- 	end)
-	-- end, {})
-	--
-	-- -- Opens GUI -> Selects Target (Project or EXE) -> Loads Breakpoints
-	-- vim.api.nvim_create_user_command("RaddebuggerInit", function(cmd_opts)
-	-- 	local target = cmd_opts.args
-	-- 	if target == "" or target == nil then
-	-- 		target = find_launch_target()
-	-- 	end
-	--
-	-- 	if not target then
-	-- 		vim.notify("No .raddbg project or .exe found. Opening empty GUI.", vim.log.levels.WARN)
-	-- 		Exec.ensure_gui_open()
-	-- 	else
-	-- 		Exec.launch_and_attach(target)
-	-- 	end
-	-- end, { nargs = "?", complete = "file" })
+	-- Just opens the GUI (or focuses it).
+	vim.api.nvim_create_user_command("RaddebuggerGUI", function()
+		Exec.ensure_gui_open(function()
+			vim.notify("RAD Debugger is ready.", vim.log.levels.INFO)
+		end)
+	end, {})
+
+	-- Opens GUI -> Selects Target (Project or EXE) -> Loads Breakpoints
+	vim.api.nvim_create_user_command("RaddebuggerInit", function(cmd_opts)
+		local target = cmd_opts.args
+		if target == "" or target == nil then
+			target = find_launch_target()
+		end
+
+		if not target then
+			vim.notify("No .raddbg project or .exe found. Opening empty GUI.", vim.log.levels.WARN)
+			Exec.ensure_gui_open()
+		else
+			Exec.launch_and_attach(target)
+		end
+	end, { nargs = "?", complete = "file" })
 
 	-- Standard Controls
 	vim.api.nvim_create_user_command("RaddebuggerToggleBreakpoint", function()
@@ -76,8 +76,12 @@ function M.setup(opts)
 	vim.api.nvim_create_user_command("RaddebuggerWatch", function()
 		local word = vim.fn.expand("<cword>")
 		if word and word ~= "" then
-			IPC.exec({ "toggle_watch_expr", word }, function(ok)
-				if ok then vim.notify("RAD: Watching '" .. word .. "'", vim.log.levels.INFO) end
+			IPC.exec({ "toggle_watch_expr", word }, function(ok, msg)
+				if ok then
+					vim.notify("RAD: Watching '" .. word .. "'", vim.log.levels.INFO)
+				else
+					vim.notify("RAD Error: " .. (msg or "Unknown"), vim.log.levels.ERROR)
+				end
 			end)
 		else
 			vim.notify("No word under cursor to watch", vim.log.levels.WARN)
@@ -89,25 +93,49 @@ function M.setup(opts)
 		local file = vim.api.nvim_buf_get_name(0)
 		local line = vim.api.nvim_win_get_cursor(0)[1]
 		local loc = Path.format_for_raddbg(file, line)
-		IPC.exec({ "open_file", loc })
+		
+		IPC.exec({ "open_file", loc }, function(ok, msg)
+			if not ok then
+				vim.notify("RAD Focus Error: " .. (msg or "Unknown"), vim.log.levels.ERROR)
+			end
+		end)
 	end, {})
 
-	-- Run to Cursor (Execute until current line is hit)
+	-- Run to Cursor
 	vim.api.nvim_create_user_command("RaddebuggerRunToCursor", function()
 		local file = vim.api.nvim_buf_get_name(0)
 		local line = vim.api.nvim_win_get_cursor(0)[1]
 		local loc = Path.format_for_raddbg(file, line)
 
-		IPC.exec({ "run_to_line", loc }, function(ok)
-			if ok then vim.notify("Running to cursor...", vim.log.levels.INFO) end
+		IPC.exec({ "run_to_line", loc }, function(ok, msg)
+			if ok then 
+				vim.notify("Running to cursor...", vim.log.levels.INFO) 
+			else
+				vim.notify("RAD Error: " .. (msg or "Unknown"), vim.log.levels.ERROR)
+			end
 		end)
 	end, {})
 
-	-- Save Project and User settings
+	-- Save Project and User settings (Sequentially)
 	vim.api.nvim_create_user_command("RaddebuggerSave", function()
-		IPC.exec({ "save_project" })
-		IPC.exec({ "save_user" })
-		vim.notify("Saved RadDebugger settings.", vim.log.levels.INFO)
+		vim.notify("Saving RAD settings...", vim.log.levels.INFO)
+		
+		-- 1. Save Project
+		IPC.exec({ "save_project" }, function(ok_proj, msg_proj)
+			if not ok_proj then
+				vim.notify("Failed to save project: " .. (msg_proj or ""), vim.log.levels.ERROR)
+				return
+			end
+			
+			-- 2. Save User (Only if project save succeeded)
+			IPC.exec({ "save_user" }, function(ok_user, msg_user)
+				if not ok_user then
+					vim.notify("Failed to save user settings: " .. (msg_user or ""), vim.log.levels.ERROR)
+				else
+					vim.notify("Saved RadDebugger settings.", vim.log.levels.INFO)
+				end
+			end)
+		end)
 	end, {})
 end
 
